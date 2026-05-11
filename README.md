@@ -22,20 +22,16 @@ npm run dev
 
 Open http://localhost:3030.
 
-## Desktop shortcut (Windows)
+## Desktop launcher (Windows)
 
-To get a double-click launcher on your desktop:
+Copy `scripts\nice.bat` to your Desktop (or anywhere). Double-click it.
 
-1. Open PowerShell in the repo root.
-2. Run `powershell -ExecutionPolicy Bypass -File scripts\create-shortcut.ps1`.
+- **First run only:** it asks where the repo folder is — paste the full path (e.g. `C:\Users\You\code\nice`). It saves the answer to `%APPDATA%\nice\repo-path.txt` and won't ask again.
+- Runs `npm install` on first launch (only if `node_modules` is missing).
+- Starts the dev server on port 3030.
+- Opens http://localhost:3030 in your default browser.
 
-That places a `nice.lnk` shortcut on your Desktop. Double-clicking it runs `scripts\launch.bat`, which:
-
-- runs `npm install` on first launch (only if `node_modules` is missing),
-- starts the dev server on port 3030,
-- opens http://localhost:3030 in your default browser.
-
-Close the terminal window (or Ctrl+C inside it) to stop the server.
+Close the terminal window (or Ctrl+C inside it) to stop the server. To move the repo later, delete `%APPDATA%\nice\repo-path.txt` and the launcher will ask again.
 
 ## Stack
 

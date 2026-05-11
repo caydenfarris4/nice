@@ -12,8 +12,9 @@ export default function HomePage() {
   const [busy, setBusy] = useState(false);
 
   async function refresh() {
-    const r = await fetch("/api/projects").then((r) => r.json());
-    setProjects(r.projects ?? []);
+    const res = await fetch("/api/projects");
+    const json = (await res.json()) as { projects?: Project[] };
+    setProjects(json.projects ?? []);
   }
   useEffect(() => {
     refresh();

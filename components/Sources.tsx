@@ -17,8 +17,9 @@ export function Sources({ projectId }: { projectId: number }) {
   const fileInput = useRef<HTMLInputElement>(null);
 
   async function refresh() {
-    const r = await fetch(`/api/projects/${projectId}/sources`).then((r) => r.json());
-    setSources(r.sources ?? []);
+    const res = await fetch(`/api/projects/${projectId}/sources`);
+    const json = (await res.json()) as { sources?: Source[] };
+    setSources(json.sources ?? []);
   }
   useEffect(() => {
     refresh();
@@ -31,9 +32,9 @@ export function Sources({ projectId }: { projectId: number }) {
     const form = new FormData();
     for (const f of Array.from(files)) form.append("file", f);
     try {
-      const r = await fetch(`/api/projects/${projectId}/sources`, { method: "POST", body: form });
-      const json = await r.json();
-      if (json.errors?.length) setErrors(json.errors.map((e: { filename: string; message: string }) => `${e.filename}: ${e.message}`));
+      const res = await fetch(`/api/projects/${projectId}/sources`, { method: "POST", body: form });
+      const json = (await res.json()) as { errors?: { filename: string; message: string }[] };
+      if (json.errors?.length) setErrors(json.errors.map((e) => `${e.filename}: ${e.message}`));
       await refresh();
     } finally {
       setBusy(false);

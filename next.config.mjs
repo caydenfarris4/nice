@@ -1,6 +1,9 @@
+import { initOpenNextCloudflareForDev } from "@opennextjs/cloudflare";
+
+initOpenNextCloudflareForDev();
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ["better-sqlite3", "pdf-parse"],
   experimental: {
     serverActions: { bodySizeLimit: "25mb" },
   },

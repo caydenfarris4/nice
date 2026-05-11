@@ -1,52 +1,4 @@
-import Database from "better-sqlite3";
-import { mkdirSync } from "node:fs";
-import { join } from "node:path";
-
-const DATA_DIR = join(process.cwd(), "data");
-mkdirSync(DATA_DIR, { recursive: true });
-
-const db = new Database(join(DATA_DIR, "nice.db"));
-db.pragma("journal_mode = WAL");
-db.pragma("foreign_keys = ON");
-
-db.exec(`
-CREATE TABLE IF NOT EXISTS projects (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL DEFAULT '',
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-
-CREATE TABLE IF NOT EXISTS sources (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  filename TEXT NOT NULL,
-  mime_type TEXT NOT NULL,
-  size INTEGER NOT NULL,
-  content TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_sources_project ON sources(project_id);
-
-CREATE TABLE IF NOT EXISTS messages (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  role TEXT NOT NULL,
-  content TEXT NOT NULL,
-  brief TEXT,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_messages_project ON messages(project_id);
-
-CREATE TABLE IF NOT EXISTS analyses (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  project_id INTEGER NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
-  lens TEXT NOT NULL,
-  payload TEXT NOT NULL,
-  created_at TEXT NOT NULL DEFAULT (datetime('now'))
-);
-CREATE INDEX IF NOT EXISTS idx_analyses_project_lens ON analyses(project_id, lens);
-`);
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 export type Project = {
   id: number;
@@ -82,36 +34,115 @@ export type Analysis = {
   created_at: string;
 };
 
+function db(): D1Database {
+  const { env } = getCloudflareContext();
+  const d1 = (env as unknown as { DB?: D1Database }).DB;
+  if (!d1) throw new Error("D1 binding 'DB' is not configured. See README for setup.");
+  return d1;
+}
+
 export const queries = {
-  listProjects: db.prepare("SELECT * FROM projects ORDER BY created_at DESC"),
-  getProject: db.prepare("SELECT * FROM projects WHERE id = ?"),
-  createProject: db.prepare("INSERT INTO projects (name, description) VALUES (?, ?)"),
-  deleteProject: db.prepare("DELETE FROM projects WHERE id = ?"),
+  async listProjects(): Promise<Project[]> {
+    const { results } = await db()
+      .prepare("SELECT * FROM projects ORDER BY created_at DESC")
+      .all<Project>();
+    return results ?? [];
+  },
 
-  listSources: db.prepare(
-    "SELECT id, project_id, filename, mime_type, size, '' as content, created_at FROM sources WHERE project_id = ? ORDER BY created_at DESC"
-  ),
-  getSourcesFull: db.prepare(
-    "SELECT * FROM sources WHERE project_id = ? ORDER BY created_at ASC"
-  ),
-  insertSource: db.prepare(
-    "INSERT INTO sources (project_id, filename, mime_type, size, content) VALUES (?, ?, ?, ?, ?)"
-  ),
-  deleteSource: db.prepare("DELETE FROM sources WHERE id = ? AND project_id = ?"),
+  async getProject(id: number): Promise<Project | null> {
+    return (await db().prepare("SELECT * FROM projects WHERE id = ?").bind(id).first<Project>()) ?? null;
+  },
 
-  listMessages: db.prepare(
-    "SELECT * FROM messages WHERE project_id = ? ORDER BY created_at ASC"
-  ),
-  insertMessage: db.prepare(
-    "INSERT INTO messages (project_id, role, content, brief) VALUES (?, ?, ?, ?)"
-  ),
+  async createProject(name: string, description: string): Promise<Project> {
+    const result = await db()
+      .prepare("INSERT INTO projects (name, description) VALUES (?, ?) RETURNING *")
+      .bind(name, description)
+      .first<Project>();
+    if (!result) throw new Error("Failed to create project");
+    return result;
+  },
 
-  getAnalysis: db.prepare(
-    "SELECT * FROM analyses WHERE project_id = ? AND lens = ? ORDER BY created_at DESC LIMIT 1"
-  ),
-  insertAnalysis: db.prepare(
-    "INSERT INTO analyses (project_id, lens, payload) VALUES (?, ?, ?)"
-  ),
+  async deleteProject(id: number): Promise<void> {
+    await db().prepare("DELETE FROM projects WHERE id = ?").bind(id).run();
+  },
+
+  async listSources(projectId: number): Promise<Omit<Source, "content">[]> {
+    const { results } = await db()
+      .prepare(
+        "SELECT id, project_id, filename, mime_type, size, created_at FROM sources WHERE project_id = ? ORDER BY created_at DESC"
+      )
+      .bind(projectId)
+      .all<Omit<Source, "content">>();
+    return results ?? [];
+  },
+
+  async getSourcesFull(projectId: number): Promise<Source[]> {
+    const { results } = await db()
+      .prepare("SELECT * FROM sources WHERE project_id = ? ORDER BY created_at ASC")
+      .bind(projectId)
+      .all<Source>();
+    return results ?? [];
+  },
+
+  async insertSource(
+    projectId: number,
+    filename: string,
+    mimeType: string,
+    size: number,
+    content: string
+  ): Promise<number> {
+    const result = await db()
+      .prepare(
+        "INSERT INTO sources (project_id, filename, mime_type, size, content) VALUES (?, ?, ?, ?, ?) RETURNING id"
+      )
+      .bind(projectId, filename, mimeType, size, content)
+      .first<{ id: number }>();
+    if (!result) throw new Error("Failed to insert source");
+    return result.id;
+  },
+
+  async deleteSource(sourceId: number, projectId: number): Promise<void> {
+    await db()
+      .prepare("DELETE FROM sources WHERE id = ? AND project_id = ?")
+      .bind(sourceId, projectId)
+      .run();
+  },
+
+  async listMessages(projectId: number): Promise<Message[]> {
+    const { results } = await db()
+      .prepare("SELECT * FROM messages WHERE project_id = ? ORDER BY created_at ASC")
+      .bind(projectId)
+      .all<Message>();
+    return results ?? [];
+  },
+
+  async insertMessage(
+    projectId: number,
+    role: "user" | "assistant",
+    content: string,
+    brief: string | null
+  ): Promise<void> {
+    await db()
+      .prepare("INSERT INTO messages (project_id, role, content, brief) VALUES (?, ?, ?, ?)")
+      .bind(projectId, role, content, brief)
+      .run();
+  },
+
+  async getAnalysis(projectId: number, lens: string): Promise<Analysis | null> {
+    return (
+      (await db()
+        .prepare(
+          "SELECT * FROM analyses WHERE project_id = ? AND lens = ? ORDER BY created_at DESC LIMIT 1"
+        )
+        .bind(projectId, lens)
+        .first<Analysis>()) ?? null
+    );
+  },
+
+  async insertAnalysis(projectId: number, lens: string, payload: string): Promise<void> {
+    await db()
+      .prepare("INSERT INTO analyses (project_id, lens, payload) VALUES (?, ?, ?)")
+      .bind(projectId, lens, payload)
+      .run();
+  },
 };
-
-export default db;

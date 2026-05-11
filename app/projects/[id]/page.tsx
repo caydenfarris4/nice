@@ -1,13 +1,15 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { queries, type Project } from "@/lib/db";
+import { queries } from "@/lib/db";
 import { Sources } from "@/components/Sources";
 import { Chat } from "@/components/Chat";
 import { Lenses } from "@/components/Lenses";
 
+
+
 export default async function ProjectPage({ params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const project = queries.getProject.get(Number(id)) as Project | undefined;
+  const project = await queries.getProject(Number(id));
   if (!project) notFound();
 
   return (

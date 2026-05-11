@@ -1,15 +1,22 @@
 import Anthropic from "@anthropic-ai/sdk";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 
-const MODEL = process.env.ANTHROPIC_MODEL || "claude-opus-4-7";
+type Env = { ANTHROPIC_API_KEY?: string; ANTHROPIC_MODEL?: string };
 
-let _client: Anthropic | null = null;
-function client(): Anthropic {
-  if (!_client) {
-    const apiKey = process.env.ANTHROPIC_API_KEY;
-    if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
-    _client = new Anthropic({ apiKey });
+function readEnv(): Env {
+  try {
+    return getCloudflareContext().env as unknown as Env;
+  } catch {
+    return (process.env ?? {}) as Env;
   }
-  return _client;
+}
+
+function getClient(): { client: Anthropic; model: string } {
+  const env = readEnv();
+  const apiKey = env.ANTHROPIC_API_KEY ?? process.env.ANTHROPIC_API_KEY;
+  if (!apiKey) throw new Error("ANTHROPIC_API_KEY is not set");
+  const model = env.ANTHROPIC_MODEL ?? process.env.ANTHROPIC_MODEL ?? "claude-opus-4-7";
+  return { client: new Anthropic({ apiKey }), model };
 }
 
 export type SourceBlob = { filename: string; content: string };
@@ -27,14 +34,18 @@ export async function callClaude(args: {
   sources: SourceBlob[];
   maxTokens?: number;
 }): Promise<string> {
-  const c = client();
+  const { client, model } = getClient();
   const sourcesText = buildSourcesText(args.sources);
-  const resp = await c.messages.create({
-    model: MODEL,
+  const resp = await client.messages.create({
+    model,
     max_tokens: args.maxTokens ?? 4096,
     system: [
       { type: "text", text: args.systemPrompt },
-      { type: "text", text: `# Project Sources\n\n${sourcesText}`, cache_control: { type: "ephemeral" } },
+      {
+        type: "text",
+        text: `# Project Sources\n\n${sourcesText}`,
+        cache_control: { type: "ephemeral" },
+      },
     ],
     messages: [{ role: "user", content: args.userMessage }],
   });

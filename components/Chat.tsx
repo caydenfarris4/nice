@@ -17,8 +17,9 @@ export function Chat({ projectId }: { projectId: number }) {
   const scrollRef = useRef<HTMLDivElement>(null);
 
   async function refresh() {
-    const r = await fetch(`/api/projects/${projectId}/messages`).then((r) => r.json());
-    setMessages(r.messages ?? []);
+    const res = await fetch(`/api/projects/${projectId}/messages`);
+    const json = (await res.json()) as { messages?: Message[] };
+    setMessages(json.messages ?? []);
   }
   useEffect(() => {
     refresh();
@@ -37,13 +38,13 @@ export function Chat({ projectId }: { projectId: number }) {
     setQuestion("");
     setMessages((m) => [...m, { id: Date.now(), role: "user", content: q, created_at: new Date().toISOString() }]);
     try {
-      const r = await fetch(`/api/projects/${projectId}/messages`, {
+      const res = await fetch(`/api/projects/${projectId}/messages`, {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ question: q }),
       });
-      const json = await r.json();
-      if (!r.ok) {
+      const json = (await res.json()) as { error?: string };
+      if (!res.ok) {
         setError(typeof json.error === "string" ? json.error : "Request failed");
       }
       await refresh();

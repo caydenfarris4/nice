@@ -58,8 +58,9 @@ function LensPanel({ projectId, lens }: { projectId: number; lens: LensName }) {
   const [error, setError] = useState<string | null>(null);
 
   async function load() {
-    const r = await fetch(`/api/projects/${projectId}/lens/${lens}`).then((r) => r.json());
-    setAnalysis(r.analysis);
+    const res = await fetch(`/api/projects/${projectId}/lens/${lens}`);
+    const json = (await res.json()) as { analysis: Analysis };
+    setAnalysis(json.analysis);
   }
   useEffect(() => {
     setAnalysis(null);
@@ -71,9 +72,9 @@ function LensPanel({ projectId, lens }: { projectId: number; lens: LensName }) {
     setBusy(true);
     setError(null);
     try {
-      const r = await fetch(`/api/projects/${projectId}/lens/${lens}`, { method: "POST" });
-      const json = await r.json();
-      if (!r.ok) {
+      const res = await fetch(`/api/projects/${projectId}/lens/${lens}`, { method: "POST" });
+      const json = (await res.json()) as { error?: string; payload?: unknown };
+      if (!res.ok) {
         setError(typeof json.error === "string" ? json.error : "Failed");
       } else {
         setAnalysis({ id: 0, lens, payload: json.payload, created_at: new Date().toISOString() });

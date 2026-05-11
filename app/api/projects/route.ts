@@ -2,10 +2,10 @@ import { NextRequest, NextResponse } from "next/server";
 import { queries } from "@/lib/db";
 import { z } from "zod";
 
-export const runtime = "nodejs";
+
 
 export async function GET() {
-  const projects = queries.listProjects.all();
+  const projects = await queries.listProjects();
   return NextResponse.json({ projects });
 }
 
@@ -20,7 +20,6 @@ export async function POST(req: NextRequest) {
   if (!parsed.success) {
     return NextResponse.json({ error: parsed.error.format() }, { status: 400 });
   }
-  const result = queries.createProject.run(parsed.data.name, parsed.data.description);
-  const project = queries.getProject.get(result.lastInsertRowid as number);
+  const project = await queries.createProject(parsed.data.name, parsed.data.description);
   return NextResponse.json({ project }, { status: 201 });
 }

@@ -1,9 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { queries, type Analysis, type Source } from "@/lib/db";
+import { queries } from "@/lib/db";
 import { runLens } from "@/lib/pipeline";
 
-export const runtime = "nodejs";
-export const maxDuration = 180;
+
 
 const VALID = new Set(["roi", "roadmap", "psych"]);
 
@@ -13,7 +12,7 @@ export async function GET(
 ) {
   const { id, name } = await params;
   if (!VALID.has(name)) return NextResponse.json({ error: "unknown lens" }, { status: 400 });
-  const row = queries.getAnalysis.get(Number(id), name) as Analysis | undefined;
+  const row = await queries.getAnalysis(Number(id), name);
   if (!row) return NextResponse.json({ analysis: null });
   return NextResponse.json({
     analysis: { id: row.id, lens: row.lens, payload: JSON.parse(row.payload), created_at: row.created_at },
@@ -27,10 +26,10 @@ export async function POST(
   const { id, name } = await params;
   const projectId = Number(id);
   if (!VALID.has(name)) return NextResponse.json({ error: "unknown lens" }, { status: 400 });
-  if (!queries.getProject.get(projectId)) {
+  if (!(await queries.getProject(projectId))) {
     return NextResponse.json({ error: "project not found" }, { status: 404 });
   }
-  const sources = (queries.getSourcesFull.all(projectId) as Source[]).map((s) => ({
+  const sources = (await queries.getSourcesFull(projectId)).map((s) => ({
     filename: s.filename,
     content: s.content,
   }));
@@ -39,7 +38,7 @@ export async function POST(
   }
   try {
     const payload = await runLens({ lens: name as "roi" | "roadmap" | "psych", sources });
-    queries.insertAnalysis.run(projectId, name, JSON.stringify(payload));
+    await queries.insertAnalysis(projectId, name, JSON.stringify(payload));
     return NextResponse.json({ payload });
   } catch (e) {
     return NextResponse.json(

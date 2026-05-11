@@ -2,18 +2,18 @@ import { NextRequest, NextResponse } from "next/server";
 import { queries } from "@/lib/db";
 import { parseFile } from "@/lib/parsers";
 
-export const runtime = "nodejs";
+
 
 export async function GET(_req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const sources = queries.listSources.all(Number(id));
+  const sources = await queries.listSources(Number(id));
   return NextResponse.json({ sources });
 }
 
 export async function POST(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const projectId = Number(id);
-  if (!queries.getProject.get(projectId)) {
+  if (!(await queries.getProject(projectId))) {
     return NextResponse.json({ error: "project not found" }, { status: 404 });
   }
   const form = await req.formData();
@@ -26,17 +26,20 @@ export async function POST(req: NextRequest, { params }: { params: Promise<{ id:
   for (const file of files) {
     try {
       const parsed = await parseFile(file);
-      const result = queries.insertSource.run(
+      const id = await queries.insertSource(
         projectId,
         parsed.filename,
         parsed.mimeType,
         parsed.size,
         parsed.content
       );
-      created.push({ id: result.lastInsertRowid, filename: parsed.filename });
+      created.push({ id, filename: parsed.filename });
     } catch (e) {
       errors.push({ filename: file.name, message: e instanceof Error ? e.message : String(e) });
     }
   }
-  return NextResponse.json({ created, errors }, { status: errors.length && !created.length ? 400 : 201 });
+  return NextResponse.json(
+    { created, errors },
+    { status: errors.length && !created.length ? 400 : 201 }
+  );
 }

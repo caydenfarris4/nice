@@ -22,6 +22,21 @@ npm run dev
 
 Open http://localhost:3030.
 
+## Desktop shortcut (Windows)
+
+To get a double-click launcher on your desktop:
+
+1. Open PowerShell in the repo root.
+2. Run `powershell -ExecutionPolicy Bypass -File scripts\create-shortcut.ps1`.
+
+That places a `nice.lnk` shortcut on your Desktop. Double-clicking it runs `scripts\launch.bat`, which:
+
+- runs `npm install` on first launch (only if `node_modules` is missing),
+- starts the dev server on port 3030,
+- opens http://localhost:3030 in your default browser.
+
+Close the terminal window (or Ctrl+C inside it) to stop the server.
+
 ## Stack
 
 Next.js 15 (App Router) · TypeScript · SQLite (better-sqlite3) · Tailwind · Recharts · Anthropic SDK.
